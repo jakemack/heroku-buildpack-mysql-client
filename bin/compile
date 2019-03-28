@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# bin/compile <build-dir> <cache-dir> <env-dir>
+
+# fail fast
+set -e
+
+# debug
+# set -x
+
+function topic() {
+  echo "-----> $*"
+}
+
+function indent() {
+  c='s/^/       /'
+  case $(uname) in
+    Darwin) sed -l "$c";;
+    *)      sed -u "$c";;
+  esac
+}
+
+function prepend_to_env_var () {
+  env_var_name=$1
+  if ! echo "${!env_var_name}" | /bin/grep -Eq "(^|:)$2($|:)" ; then
+    export $env_var_name="$2:${!env_var_name}"
+  fi
+}
+
+# parse and derive params
+BUILD_DIR=$1
+CACHE_DIR=$2
+ENV_DIR=$3
+
+BUILDPACK_DIR=`cd $(dirname $0); cd ..; pwd`
+
+APT_DIR="$BUILD_DIR/.apt"
+APT_CACHE_DIR="$CACHE_DIR/apt/cache"
+APT_STATE_DIR="$CACHE_DIR/apt/state"
+BIN_DIR="$APT_DIR/usr/bin"
+
+
+mkdir -p "$APT_CACHE_DIR/archives/partial"
+mkdir -p "$APT_STATE_DIR/lists/partial"
+mkdir -p "$APT_DIR"
+
+topic "Installing MySQL client"
+
+PACKAGE="mysql-client"
+
+topic "Updating apt caches"
+APT_OPTIONS="-o debug::nolocking=true -o dir::cache=$APT_CACHE_DIR -o dir::state=$APT_STATE_DIR"
+apt-get $APT_OPTIONS update | indent
+
+topic "Fetching .debs for $PACKAGE"
+apt-get $APT_OPTIONS -y --allow-downgrades --allow-remove-essential --allow-change-held-packages -d install --reinstall $PACKAGE | indent
+
+for DEB in $(ls -1 $APT_CACHE_DIR/archives/*.deb); do
+  topic "Installing $(basename $DEB)"
+  dpkg -x $DEB $APT_DIR/
+done
+
+topic "Writing profile script"
+mkdir -p $BUILD_DIR/.profile.d
+cat <<EOF >$BUILD_DIR/.profile.d/000_apt.sh
+function prepend_to_env_var () {
+  env_var_name=\$1
+  if ! echo "\${!env_var_name}" | /bin/grep -Eq "(^|:)\$2($|:)" ; then
+    export \$env_var_name="\$2:\${!env_var_name}"
+  fi
+}
+prepend_to_env_var "PATH" "$APT_DIR/usr/bin"
+EOF
