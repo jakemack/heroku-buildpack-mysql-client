@@ -77,7 +77,8 @@ case "$mysql_version" in
     curl -s -L -z $PACKAGE_FILE -o $PACKAGE_FILE $PACKAGE 2>&1 | indent
 
     TMP_DIR=/tmp
-    tar zxvf $PACKAGE_FILE --directory $TMP_DIR/
+    topic "Installing $BIN_DIR/mysql"
+    tar zxf $PACKAGE_FILE --directory $TMP_DIR/
 
     mv "$TMP_DIR/$PACKAGE_NAME/bin/mysql" "$BIN_DIR/mysql"
     ;;
