@@ -64,17 +64,6 @@ case "$mysql_version" in
     topic "Updating apt caches"
     apt-get $APT_OPTIONS update | indent
 
-    DEPENDENCIES="libaio1"
-    for DEPENDENCY in $DEPENDENCIES; do
-      topic "Fetching .debs for $DEPENDENCY"
-      apt-get $APT_OPTIONS -y --allow-downgrades --allow-remove-essential --allow-change-held-packages -d install --reinstall $DEPENDENCY | indent
-    done
-
-    for DEB in $(ls -1 $APT_CACHE_DIR/archives/*.deb); do
-      topic "Installing $(basename $DEB)"
-      dpkg -x $DEB $BUILD_DIR/.apt/
-    done
-
     PACKAGE="https://dev.mysql.com/get/Downloads/MySQL-5.5/mysql-5.5.62-linux-glibc2.12-x86_64.tar.gz"
     PACKAGE_NAME=$(basename $PACKAGE .tar.gz)
     PACKAGE_FILE=$APT_CACHE_DIR/archives/$PACKAGE_NAME
@@ -86,7 +75,6 @@ case "$mysql_version" in
     tar zxf $PACKAGE_FILE --directory $TMP_DIR/
 
     mv "$TMP_DIR/$PACKAGE_NAME/bin/mysql" "$BIN_DIR/mysql"
-    mv "$TMP_DIR/$PACKAGE_NAME/bin/mysqld" "$BIN_DIR/mysqld"
     ;;
   "5.7")
     topic "Updating apt caches"
@@ -119,5 +107,4 @@ function prepend_to_env_var () {
   fi
 }
 prepend_to_env_var "PATH" "$BIN_DIR"
-prepend_to_env_var "LD_LIBRARY_PATH" "\$HOME/build/.apt/lib/x86_64-linux-gnu"
 EOF
