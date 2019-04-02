@@ -52,7 +52,7 @@ mkdir -p "$BIN_DIR"
 if [ -f $ENV_DIR/MYSQL_VERSION ]; then
   mysql_version=$(cat $ENV_DIR/MYSQL_VERSION)
 else
-  mysql_version=5.7
+  mysql_version=5.5
 fi
 APT_OPTIONS="-o debug::nolocking=true -o dir::cache=$APT_CACHE_DIR -o dir::state=$APT_STATE_DIR"
 
@@ -70,6 +70,11 @@ case "$mysql_version" in
       apt-get $APT_OPTIONS -y --allow-downgrades --allow-remove-essential --allow-change-held-packages -d install --reinstall $DEPENDENCY | indent
     done
 
+    for DEB in $(ls -1 $APT_CACHE_DIR/archives/*.deb); do
+      topic "Installing $(basename $DEB)"
+      dpkg -x $DEB $BUILD_DIR/.apt/
+    done
+
     PACKAGE="https://dev.mysql.com/get/Downloads/MySQL-5.5/mysql-5.5.62-linux-glibc2.12-x86_64.tar.gz"
     PACKAGE_NAME=$(basename $PACKAGE .tar.gz)
     PACKAGE_FILE=$APT_CACHE_DIR/archives/$PACKAGE_NAME
@@ -81,6 +86,7 @@ case "$mysql_version" in
     tar zxf $PACKAGE_FILE --directory $TMP_DIR/
 
     mv "$TMP_DIR/$PACKAGE_NAME/bin/mysql" "$BIN_DIR/mysql"
+    mv "$TMP_DIR/$PACKAGE_NAME/bin/mysqld" "$BIN_DIR/mysqld"
     ;;
   "5.7")
     topic "Updating apt caches"
@@ -106,9 +112,12 @@ mkdir -p $BUILD_DIR/.profile.d
 cat <<EOF >$BUILD_DIR/.profile.d/000_apt.sh
 function prepend_to_env_var () {
   env_var_name=\$1
-  if ! echo "\${!env_var_name}" | /bin/grep -Eq "(^|:)\$2($|:)" ; then
+  if [[ -z "\${!env_var_name// }" ]] ; then
+    export \$env_var_name="\$2"
+  elif ! echo "\${!env_var_name}" | /bin/grep -Eq "(^|:)\$2($|:)" ; then
     export \$env_var_name="\$2:\${!env_var_name}"
   fi
 }
 prepend_to_env_var "PATH" "$BIN_DIR"
+prepend_to_env_var "LD_LIBRARY_PATH" "\$HOME/build/.apt/lib/x86_64-linux-gnu"
 EOF
