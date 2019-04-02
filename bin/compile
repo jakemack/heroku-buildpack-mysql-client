@@ -41,10 +41,12 @@ BUILDPACK_DIR=`cd $(dirname $0); cd ..; pwd`
 APT_DIR="$BUILD_DIR/.apt"
 APT_CACHE_DIR="$CACHE_DIR/apt/cache"
 APT_STATE_DIR="$CACHE_DIR/apt/state"
+BIN_DIR="$APT_DIR/usr/bin"
 
 mkdir -p "$APT_CACHE_DIR/archives/partial"
 mkdir -p "$APT_STATE_DIR/lists/partial"
 mkdir -p "$APT_DIR"
+mkdir -p "$BIN_DIR"
 
 # Detect requested channel or default to stable
 if [ -f $ENV_DIR/MYSQL_VERSION ]; then
@@ -74,9 +76,10 @@ case "$mysql_version" in
     topic "Fetching $PACKAGE"
     curl -s -L -z $PACKAGE_FILE -o $PACKAGE_FILE $PACKAGE 2>&1 | indent
 
-    tar zxvf $PACKAGE_FILE --directory $APT_DIR/
+    TMP_DIR=/tmp
+    tar zxvf $PACKAGE_FILE --directory $TMP_DIR/
 
-    BIN_DIR="$APT_DIR/$PACKAGE_NAME/bin"
+    mv "$TMP_DIR/$PACKAGE_NAME/bin/mysql" "$BIN_DIR/mysql"
     ;;
   "5.7")
     topic "Updating apt caches"
@@ -91,8 +94,6 @@ case "$mysql_version" in
       topic "Installing $(basename $DEB)"
       dpkg -x $DEB $APT_DIR/
     done
-
-    BIN_DIR="$APT_DIR/usr/bin"
     ;;
   *)
     error "'$mysql_version' is not supported at this time, please specify 5.5 or 5.7"
