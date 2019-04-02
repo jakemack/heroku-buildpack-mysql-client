@@ -46,7 +46,12 @@ mkdir -p "$APT_CACHE_DIR/archives/partial"
 mkdir -p "$APT_STATE_DIR/lists/partial"
 mkdir -p "$APT_DIR"
 
-mysql_version=${MYSQL_VERSION:-5.7}
+# Detect requested channel or default to stable
+if [ -f $ENV_DIR/MYSQL_VERSION ]; then
+  mysql_version=$(cat $ENV_DIR/MYSQL_VERSION)
+else
+  mysql_version=5.7
+fi
 APT_OPTIONS="-o debug::nolocking=true -o dir::cache=$APT_CACHE_DIR -o dir::state=$APT_STATE_DIR"
 
 topic "Installing MySQL client version $mysql_version"
