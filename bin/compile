@@ -7,6 +7,11 @@ set -e
 # debug
 # set -x
 
+function error() {
+  echo " !     $*" >&2
+  exit 1
+}
+
 function topic() {
   echo "-----> $*"
 }
@@ -36,28 +41,58 @@ BUILDPACK_DIR=`cd $(dirname $0); cd ..; pwd`
 APT_DIR="$BUILD_DIR/.apt"
 APT_CACHE_DIR="$CACHE_DIR/apt/cache"
 APT_STATE_DIR="$CACHE_DIR/apt/state"
-BIN_DIR="$APT_DIR/usr/bin"
-
 
 mkdir -p "$APT_CACHE_DIR/archives/partial"
 mkdir -p "$APT_STATE_DIR/lists/partial"
 mkdir -p "$APT_DIR"
 
-topic "Installing MySQL client"
-
-PACKAGE="mysql-client"
-
-topic "Updating apt caches"
+mysql_version=${MYSQL_VERSION:-5.7}
 APT_OPTIONS="-o debug::nolocking=true -o dir::cache=$APT_CACHE_DIR -o dir::state=$APT_STATE_DIR"
-apt-get $APT_OPTIONS update | indent
 
-topic "Fetching .debs for $PACKAGE"
-apt-get $APT_OPTIONS -y --allow-downgrades --allow-remove-essential --allow-change-held-packages -d install --reinstall $PACKAGE | indent
+topic "Installing MySQL client version $mysql_version"
 
-for DEB in $(ls -1 $APT_CACHE_DIR/archives/*.deb); do
-  topic "Installing $(basename $DEB)"
-  dpkg -x $DEB $APT_DIR/
-done
+topic "Installing MySQL client"
+case "$mysql_version" in
+  "5.5")
+    topic "Updating apt caches"
+    apt-get $APT_OPTIONS update | indent
+
+    DEPENDENCIES="libaio1"
+    for DEPENDENCY in $DEPENDENCIES; do
+      topic "Fetching .debs for $DEPENDENCY"
+      apt-get $APT_OPTIONS -y --allow-downgrades --allow-remove-essential --allow-change-held-packages -d install --reinstall $DEPENDENCY | indent
+    done
+
+    PACKAGE="https://dev.mysql.com/get/Downloads/MySQL-5.5/mysql-5.5.62-linux-glibc2.12-x86_64.tar.gz"
+    PACKAGE_NAME=$(basename $PACKAGE .tar.gz)
+    PACKAGE_FILE=$APT_CACHE_DIR/archives/$PACKAGE_NAME
+    topic "Fetching $PACKAGE"
+    curl -s -L -z $PACKAGE_FILE -o $PACKAGE_FILE $PACKAGE 2>&1 | indent
+
+    tar zxvf $PACKAGE_FILE --directory $APT_DIR/
+
+    BIN_DIR="$APT_DIR/$PACKAGE_NAME/bin"
+    ;;
+  "5.7")
+    topic "Updating apt caches"
+    apt-get $APT_OPTIONS update | indent
+
+    PACKAGE="mysql-client"
+
+    topic "Fetching .debs for $PACKAGE"
+    apt-get $APT_OPTIONS -y --allow-downgrades --allow-remove-essential --allow-change-held-packages -d install --reinstall $PACKAGE | indent
+
+    for DEB in $(ls -1 $APT_CACHE_DIR/archives/*.deb); do
+      topic "Installing $(basename $DEB)"
+      dpkg -x $DEB $APT_DIR/
+    done
+
+    BIN_DIR="$APT_DIR/usr/bin"
+    ;;
+  *)
+    error "'$mysql_version' is not supported at this time, please specify 5.5 or 5.7"
+    ;;
+esac
 
 topic "Writing profile script"
 mkdir -p $BUILD_DIR/.profile.d
@@ -68,5 +103,5 @@ function prepend_to_env_var () {
     export \$env_var_name="\$2:\${!env_var_name}"
   fi
 }
-prepend_to_env_var "PATH" "$APT_DIR/usr/bin"
+prepend_to_env_var "PATH" "$BIN_DIR"
 EOF
